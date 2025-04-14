@@ -1,20 +1,107 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
+import {View, Alert, ScrollView, TouchableOpacity} from 'react-native';
 import {
-  SafeAreaView,
-  StyleSheet,
+  Provider as PaperProvider,
+  DefaultTheme,
   Text,
-  TouchableOpacity,
-  View,
-  Alert,
-  TextInput,
   Button,
-} from 'react-native';
+  TextInput,
+  Switch,
+  Appbar,
+  Card,
+  IconButton,
+} from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/FontAwesome';
+
+const theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#2EA2FA',
+    background: '#1e1e1e',
+    text: '#ffffff',
+    surface: '#333',
+  },
+};
+
+const defaultCommands = [
+  {
+    id: 'openCommandPalette',
+    name: 'Open Command Palette',
+    buttonLabel: 'Command Palette',
+    isVisible: true,
+    type: 'command',
+    vscodeCommand: 'workbench.action.showCommands',
+  },
+  {
+    id: 'insertBracesLeft',
+    name: 'Insert  {',
+    buttonLabel: '{',
+    isVisible: true,
+    type: 'snippet',
+    snippet: '{',
+  },
+  {
+    id: 'insertBracesRight',
+    name: 'Insert  }',
+    buttonLabel: '}',
+    isVisible: true,
+    type: 'snippet',
+    snippet: '}',
+  },
+  {
+    id: 'insertPipes',
+    name: 'Insert ||',
+    buttonLabel: '||',
+    isVisible: true,
+    type: 'snippet',
+    snippet: '||',
+  },
+  {
+    id: 'closeTerminal',
+    name: 'Close Terminal',
+    buttonLabel: 'Close Terminal',
+    isVisible: true,
+    type: 'terminal',
+    vscodeCommand: 'closeTerminal',
+  },
+  {
+    id: 'reloadWindow',
+    name: 'Reload Window',
+    buttonLabel: 'Reload Window',
+    isVisible: true,
+    type: 'command',
+    vscodeCommand: 'workbench.action.reloadWindow',
+  },
+  {
+    id: 'openSourceControl',
+    name: 'Open Source Control',
+    buttonLabel: 'Source Control',
+    isVisible: true,
+    type: 'command',
+    vscodeCommand: 'workbench.view.scm',
+  },
+];
 
 export default function App() {
   const ws = useRef(null);
   const [ip, setIp] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [currentPage, setCurrentPage] = useState('Settings');
+  const [commands, setCommands] = useState(defaultCommands);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const savedIp = await AsyncStorage.getItem('@saved_ip');
+        if (savedIp) setIp(savedIp);
+      } catch (e) {
+        console.log('Failed to load IP from storage', e);
+      }
+    };
+    loadSettings();
+  }, []);
 
   const connect = () => {
     if (!ip) {
@@ -32,6 +119,7 @@ export default function App() {
       console.log('WebSocket connected');
       setConnectionStatus('Connected');
       Alert.alert('Success', 'WebSocket connected.');
+      sendCommandListToExtension();
     };
 
     ws.current.onclose = () => {
@@ -57,241 +145,188 @@ export default function App() {
     }
   };
 
-  const saveIp = () => {
+  const sendCommandListToExtension = (updatedCommands = commands) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      const message = {
+        type: 'commandList',
+        data: updatedCommands,
+      };
+      ws.current.send(JSON.stringify(message));
+    }
+  };
+
+  const saveIp = async () => {
     if (!ip) {
       Alert.alert('Error', 'Please enter a valid IP address.');
       return;
+    }
+
+    try {
+      await AsyncStorage.setItem('@saved_ip', ip);
+      Alert.alert('Success', 'IP address saved.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save IP address.');
     }
 
     if (ws.current) {
       ws.current.close();
       setConnectionStatus('Disconnected');
     }
-
-    Alert.alert('Success', 'IP address saved. You can now connect manually.');
   };
 
-  const sendCommand = command => {
+  const sendCommand = id => {
     if (ws.current && connectionStatus === 'Connected') {
-      ws.current.send(command);
+      const message = {
+        type: 'executeCommand',
+        id,
+      };
+      ws.current.send(JSON.stringify(message));
     } else {
-      Alert.alert('Error', 'Cannot send command. WebSocket is not connected.');
+      Alert.alert('Error', 'WebSocket is not connected.');
     }
   };
 
-  const renderSettingsPage = () => (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>VS Code Remote - Settings</Text>
-      <View style={styles.inputGroup}>
+  const renderSettings = () => (
+    <ScrollView style={{padding: 20}}>
+      <Text variant="headlineMedium" style={{color: '#fff', marginBottom: 10}}>
+        Settings
+      </Text>
+      <View
+        style={{flexDirection: 'row', alignItems: 'center', marginBottom: 10}}>
         <TextInput
-          style={styles.input}
-          placeholder="Enter IP Address"
-          placeholderTextColor="#aaa"
+          label="IP Address"
           value={ip}
           onChangeText={setIp}
+          mode="outlined"
+          placeholder="e.g. 192.168.178.34"
+          style={{flex: 1, marginRight: 10}}
+          textColor="#fff"
         />
-        <TouchableOpacity onPress={saveIp} style={styles.saveButton}>
-          <Text style={styles.saveButtonText}>Save IP</Text>
-        </TouchableOpacity>
+        <Button mode="contained" onPress={saveIp}>
+          Save IP
+        </Button>
       </View>
-      <View style={styles.buttonGroup}>
-        <TouchableOpacity onPress={connect} style={styles.connectButton}>
-          <Text style={styles.buttonText}>Connect</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={disconnect} style={styles.disconnectButton}>
-          <Text style={styles.buttonText}>Disconnect</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusText}>
-          Connection Status: {connectionStatus}
+      <Button mode="contained" onPress={connect} style={{marginBottom: 10}}>
+        Connect
+      </Button>
+      <Button mode="outlined" onPress={disconnect} style={{marginBottom: 20}}>
+        Disconnect
+      </Button>
+      <View style={{padding: 20}}>
+        <Text style={{color: '#fff', marginBottom: 20}}>
+          Status: {connectionStatus}
         </Text>
       </View>
-    </SafeAreaView>
+      <Text style={{color: '#fff', marginBottom: 10}}>Commands:</Text>
+      {commands.map(cmd => (
+        <Card
+          key={cmd.id}
+          style={{
+            marginBottom: 10,
+            backgroundColor: '#333',
+            elevation: 4,
+            height: 70,
+          }}>
+          <Card.Title
+            title={cmd.name}
+            titleStyle={{
+              color: '#fff',
+              fontSize: 14,
+            }}
+            right={() => (
+              <Switch
+                value={cmd.isVisible}
+                onValueChange={value => {
+                  const updated = commands.map(c =>
+                    c.id === cmd.id ? {...c, isVisible: value} : c,
+                  );
+                  setCommands(updated);
+                  sendCommandListToExtension(updated);
+                }}
+              />
+            )}
+          />
+        </Card>
+      ))}
+    </ScrollView>
   );
 
-  const renderCommandPage = () => (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>VS Code Remote</Text>
-      {connectionStatus === 'Connected' ? (
-        <View style={styles.commandGrid}>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('openCommandPalette')}>
-            <Text style={styles.commandButtonText}>Command Palette</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('openSourceControl')}>
-            <Text style={styles.commandButtonText}>Source Control</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('closeTerminal')}>
-            <Text style={styles.commandButtonText}>Close Terminal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('insertBracesLeft')}>
-            <Text style={styles.commandButtonText}>Insert {'{'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('insertBracesRight')}>
-            <Text style={styles.commandButtonText}>Insert {'}'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('insertPipes')}>
-            <Text style={styles.commandButtonText}>Insert ||</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.commandButton}
-            onPress={() => sendCommand('reloadWindow')}>
-            <Text style={styles.commandButtonText}>Reload Window</Text>
-          </TouchableOpacity>
-        </View>
+  const renderCommands = () => (
+    <ScrollView style={{padding: 20}}>
+      <Text variant="headlineMedium" style={{color: '#fff', marginBottom: 20}}>
+        Commands
+      </Text>
+      {connectionStatus !== 'Connected' ? (
+        <Text style={{color: '#fff'}}>Please connect first.</Text>
       ) : (
-        <Text style={styles.statusText}>
-          Please connect to the WebSocket to use commands.
-        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+          }}>
+          {commands
+            .filter(c => c.isVisible)
+            .map(cmd => (
+              <TouchableOpacity
+                key={cmd.id}
+                onPress={() => sendCommand(cmd.id)}
+                style={{
+                  width: '31%',
+                  height: 112,
+                  marginBottom: 8,
+                  backgroundColor: '#2EA2FA',
+                  borderRadius: 6,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  padding: 4,
+                }}>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: '#111',
+                    textAlign: 'center',
+                  }}
+                  numberOfLines={3}>
+                  {cmd.buttonLabel}
+                </Text>
+              </TouchableOpacity>
+            ))}
+        </View>
       )}
-    </SafeAreaView>
+    </ScrollView>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {currentPage === 'Settings' ? renderSettingsPage() : renderCommandPage()}
-      <View style={styles.footer}>
-        <TouchableOpacity
+    <PaperProvider theme={theme}>
+      <Appbar.Header
+        mode="center-aligned"
+        style={{
+          height: 100,
+          paddingTop: 20,
+          paddingBottom: 20,
+          justifyContent: 'center',
+          elevation: 4,
+        }}>
+        <Appbar.Content
+          title="VS Code Remote"
+          titleStyle={{
+            fontSize: 29,
+            textAlign: 'center',
+          }}
+        />
+        <Appbar.Action
+          icon={() => <Icon name="cogs" size={24} color="#111" />}
           onPress={() => setCurrentPage('Settings')}
-          style={[
-            styles.footerButton,
-            currentPage === 'Settings' && styles.activeFooterButton,
-          ]}>
-          <Text style={styles.footerButtonText}>Settings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        />
+        <Appbar.Action
+          icon={() => <Icon name="code" size={24} color="#111" />}
           onPress={() => setCurrentPage('Commands')}
-          style={[
-            styles.footerButton,
-            currentPage === 'Commands' && styles.activeFooterButton,
-          ]}>
-          <Text style={styles.footerButtonText}>Commands</Text>
-        </TouchableOpacity>
+        />
+      </Appbar.Header>
+      <View style={{flex: 1, backgroundColor: theme.colors.background}}>
+        {currentPage === 'Settings' ? renderSettings() : renderCommands()}
       </View>
-    </SafeAreaView>
+    </PaperProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1e1e1e',
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 26,
-    color: '#fff',
-    marginBottom: 20,
-    alignSelf: 'center',
-  },
-  inputGroup: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    height: 40,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    color: '#fff',
-    backgroundColor: '#333',
-    marginRight: 10,
-  },
-  saveButton: {
-    backgroundColor: '#2EA2FA',
-    padding: 10,
-    borderRadius: 5,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  buttonGroup: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    gap: 10,
-  },
-  connectButton: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 5,
-  },
-  disconnectButton: {
-    backgroundColor: '#F44336',
-    padding: 15,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  statusContainer: {
-    marginTop: 30,
-    alignItems: 'center',
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    backgroundColor: '#333',
-  },
-  footerButton: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 10,
-  },
-  activeFooterButton: {
-    backgroundColor: '#555',
-  },
-  footerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  commandGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingHorizontal: 10,
-  },
-  commandButton: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#2EA2FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 10,
-    borderRadius: 10,
-  },
-  commandButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-});
