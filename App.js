@@ -14,7 +14,7 @@ export default function App() {
   const ws = useRef(null);
   const [ip, setIp] = useState('');
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
-  const [currentPage, setCurrentPage] = useState('Settings'); // Track current page
+  const [currentPage, setCurrentPage] = useState('Settings');
 
   const connect = () => {
     if (!ip) {
@@ -189,8 +189,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1e1e1e',
     padding: 20,
-    justifyContent: 'center', // Center elements vertically
-    alignItems: 'center', // Center elements horizontally
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 26,
@@ -226,10 +226,10 @@ const styles = StyleSheet.create({
   },
   buttonGroup: {
     flexDirection: 'row',
-    justifyContent: 'center', // Center buttons horizontally
+    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
-    gap: 10, // Add a small gap between buttons
+    gap: 10,
   },
   connectButton: {
     backgroundColor: '#4CAF50',
@@ -275,18 +275,18 @@ const styles = StyleSheet.create({
   commandGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center', // Center buttons horizontally
-    alignItems: 'center', // Center buttons vertically
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 20,
     paddingHorizontal: 10,
   },
   commandButton: {
-    width: 80, // Reduce width
-    height: 80, // Reduce height to match width
+    width: 80,
+    height: 80,
     backgroundColor: '#2EA2FA',
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 10, // Equal gap for both rows and columns
+    margin: 10,
     borderRadius: 10,
   },
   commandButtonText: {
